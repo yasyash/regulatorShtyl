@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018-2019 Yaroslav Shkliar <mail@ilit.ru>
+ * Copyright © 2020 Yaroslav Shkliar <mail@ilit.ru>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public

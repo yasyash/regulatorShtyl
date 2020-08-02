@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018-2019 Yaroslav Shkliar <mail@ilit.ru>
+ * Copyright © 2020 Yaroslav Shkliar <mail@ilit.ru>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -64,14 +64,21 @@ ups_status::ups_status( QString *ip, quint16 *port, QString *ups_username)
         return;
     }
 
-    vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
+   // vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
 
-
+ vars = get_data((char*)".1.3.6.1.4.1.34498.2.6.1.11.2.0"); //detect ext. sensor connection
 
     if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) {
-        print_variable(vars->name, vars->val_len, vars);
+        //print_variable(vars->name, vars->val_len, vars);
         //qDebug() << "Error: \n" << snmp_errstring(response->errstat);
-
+         ext_sensor = (*vars->val.integer);
+         if (ext_sensor){
+        qDebug() << "External temperature sensor is detected ...";
+         err_count--;
+}
+         else {
+         qDebug() << "External temperature sensor is not detected ...";
+}
 
     } else {
         /*
@@ -135,6 +142,17 @@ void ups_status::read_voltage()
     {
         voltage = float(*vars->val.integer)/10;
         measure->insert("Напряжение", voltage);
+    }
+
+}
+
+void ups_status::read_ext_temp()
+{
+    vars = get_data((char*)".1.3.6.1.4.1.34498.2.6.1.11.3.0"); //read ext. temperature
+    if (vars)
+    {
+        ext_temp = (*vars->val.integer);
+        //measure->insert("Напряжение", voltage);
     }
 
 }

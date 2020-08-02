@@ -1,5 +1,5 @@
 /*
- * Copyright © 2018-2019 Yaroslav Shkliar <mail@ilit.ru>
+ * Copyright © 2020 Yaroslav Shkliar <mail@ilit.ru>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,6 +44,7 @@ public:
     explicit ups_status( QString *ip, quint16 *port, QString *ups_username);
     ~ups_status();
     void read_voltage();
+    void read_ext_temp();
 
 public:
     struct snmp_session session, *ss;
@@ -55,7 +56,7 @@ public:
 
     struct variable_list *vars;
     int status;
-    int err_count = 0;
+    int err_count = 1;
 
     QString *addr;
     quint16 *u_port;
@@ -65,6 +66,9 @@ public:
     QString *location;
     int *uptime;
     float voltage;
+
+    int ext_sensor = 1;
+    int ext_temp;
 
     bool is_read;
     uint sample_t;
