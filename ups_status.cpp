@@ -64,21 +64,21 @@ ups_status::ups_status( QString *ip, quint16 *port, QString *ups_username)
         return;
     }
 
-   // vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
+    // vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
 
- vars = get_data((char*)".1.3.6.1.4.1.34498.2.6.1.11.2.0"); //detect ext. sensor connection
+    vars = get_data((char*)".1.3.6.1.4.1.34498.2.6.1.11.2.0"); //detect ext. sensor connection
 
     if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) {
         //print_variable(vars->name, vars->val_len, vars);
         //qDebug() << "Error: \n" << snmp_errstring(response->errstat);
-         ext_sensor = (*vars->val.integer);
-         if (ext_sensor){
-        qDebug() << "External temperature sensor is detected ...";
-         err_count--;
-}
-         else {
-         qDebug() << "External temperature sensor is not detected ...";
-}
+        ext_sensor = (*vars->val.integer);
+        if (ext_sensor){
+            qDebug() << "External temperature sensor is detected ...";
+            err_count--;
+        }
+        else {
+            qDebug() << "External temperature sensor is not detected ...";
+        }
 
     } else {
         /*
@@ -128,6 +128,160 @@ err_count--;
     }
 }
 
+ups_status::ups_status( QString *ip, quint16 *port, QString *ups_username, int version_snmp)
+{
+
+
+    /*
+     * Initialize the SNMP library
+     */
+
+    init_snmp("snmpapp");
+
+
+    /*
+     * Initialize a "session" that defines who we're going to talk to
+     */
+    addr = ip;
+    u_port = port;
+    user_name = ups_username;
+
+    snmp_sess_init( &session );                   /* set up defaults */
+    session.peername = strdup(ip->toLocal8Bit().data());
+
+
+    /* set the SNMP version number */
+    session.version = SNMP_VERSION_2c;
+    u_char *community  =(u_char *) ups_username->toStdString().c_str();
+    QByteArray _comm = ups_username->toUtf8();
+
+    session.community = community;
+    session.community_len = (size_t)(_comm.length());
+    /* set the security level to authenticated,  encrypted */
+    // session.securityLevel = SNMP_SEC_LEVEL_AUTHPRIV;
+    /* set the authentication method to MD5 */
+    /*   session.securityAuthProto = usmHMACMD5AuthProtocol;\
+           session.securityAuthProtoLen = sizeof(usmHMACMD5AuthProtocol)/sizeof(oid);
+           session.securityAuthKeyLen = USM_AUTH_KU_LEN;
+           /* set the private proto to  */
+    /*      session.securityPrivProto = usmDESPrivProtocol;
+              session.securityPrivProtoLen = sizeof(usmDESPrivProtocol)/sizeof(oid);
+              session.securityPrivKeyLen = USM_PRIV_KU_LEN;
+
+
+             if( generate_Ku(session.securityAuthProto,
+                                  session.securityAuthProtoLen,
+                                  (u_char *) our_v3_passphrase, strlen(our_v3_passphrase),
+                                  session.securityAuthKey,
+                             &session.securityAuthKeyLen) != SNMPERR_SUCCESS) {
+              qDebug() << "Error generating Ku from authentication pass phrase. \n";
+             }
+
+*/
+
+    //session.rcvMsgMaxSize = MAX_NAME_LEN;
+
+    /*
+     * Open the session
+     */
+
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss) {
+        //snmp_sess_perror("ack", &session);
+        //SOCK_CLEANUP;
+        //exit(1);
+        qDebug() << "Server SNMP monitoring initialization with issues..."<< "\n\r";
+        status = 0;
+        return;
+    }
+    else {
+        qDebug() << "Server SNMP monitoring initialization complete..."<< "\n\r";
+        status = 1;
+
+    }
+    // vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
+
+
+}
+
+void ups_status::snmp_reinit( QString *ip, quint16 *port, QString *ups_username, int version_snmp)
+{
+
+
+    /*
+     * Initialize the SNMP library
+     */
+
+    init_snmp("snmpapp");
+
+
+    /*
+     * Initialize a "session" that defines who we're going to talk to
+     */
+    addr = ip;
+    u_port = port;
+    user_name = ups_username;
+
+    snmp_sess_init( &session );                   /* set up defaults */
+    session.peername = strdup(ip->toLocal8Bit().data());
+
+
+    /* set the SNMP version number */
+    session.version = SNMP_VERSION_2c;
+    u_char *community  =(u_char *) ups_username->toStdString().c_str();
+    QByteArray _comm = ups_username->toUtf8();
+
+    session.community = community;
+    session.community_len = (size_t)(_comm.length());
+    /* set the security level to authenticated,  encrypted */
+    // session.securityLevel = SNMP_SEC_LEVEL_AUTHPRIV;
+    /* set the authentication method to MD5 */
+    /*   session.securityAuthProto = usmHMACMD5AuthProtocol;\
+           session.securityAuthProtoLen = sizeof(usmHMACMD5AuthProtocol)/sizeof(oid);
+           session.securityAuthKeyLen = USM_AUTH_KU_LEN;
+           /* set the private proto to  */
+    /*      session.securityPrivProto = usmDESPrivProtocol;
+              session.securityPrivProtoLen = sizeof(usmDESPrivProtocol)/sizeof(oid);
+              session.securityPrivKeyLen = USM_PRIV_KU_LEN;
+
+
+             if( generate_Ku(session.securityAuthProto,
+                                  session.securityAuthProtoLen,
+                                  (u_char *) our_v3_passphrase, strlen(our_v3_passphrase),
+                                  session.securityAuthKey,
+                             &session.securityAuthKeyLen) != SNMPERR_SUCCESS) {
+              qDebug() << "Error generating Ku from authentication pass phrase. \n";
+             }
+
+*/
+
+    //session.rcvMsgMaxSize = MAX_NAME_LEN;
+
+    /*
+     * Open the session
+     */
+
+    ss = snmp_open(&session);                     /* establish the session */
+
+    if (!ss) {
+        //snmp_sess_perror("ack", &session);
+        //SOCK_CLEANUP;
+        //exit(1);
+        qDebug() << "Server SNMP monitoring initialization with issues..."<< "\n\r";
+        status = 0;
+        return;
+    }
+    else {
+        qDebug() << "Server SNMP monitoring initialization complete..."<< "\n\r";
+        status = 1;
+
+    }
+    // vars = get_data((char*)".1.3.6.1.2.1.1.1.0"); //sysDescription MIB
+
+
+}
+
 ups_status::~ups_status()
 {
     snmp_close(ss);
@@ -155,6 +309,33 @@ void ups_status::read_ext_temp()
         //measure->insert("Напряжение", voltage);
     }
 
+}
+
+bool ups_status::read_output_status()
+{
+    vars = get_data((char*)".1.3.6.1.2.1.33.1.4.1.0"); //read output status
+    if (vars)
+    {
+        int status = (*vars->val.integer);
+        if (status == 2)
+            return false;
+        if (status == 3)
+            return true;
+        //measure->insert("Напряжение", voltage);
+    }
+}
+
+bool ups_status::read_srv_status()
+{
+    vars = get_data((char*)".1.3.6.1.4.1.21317.1.4.0"); //read server power on status
+    if (vars)
+    {
+        int status = (*vars->val.integer);
+        if (status == 0)
+            return false;
+        if (status == 1)
+            return true;
+    }
 }
 
 variable_list * ups_status::get_data(char * mib)

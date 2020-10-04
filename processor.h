@@ -76,7 +76,7 @@ private:
 
     QSqlDatabase * m_conn;
     QUuid * m_uuidStation;
-
+    bool is_conn = false;
 
     bool verbose; //verbose mode flag
 
@@ -84,6 +84,14 @@ private:
     QString m_ups_ip;
     quint16 m_ups_port;
     QString m_ups_username;
+
+    ups_status *m_srv = nullptr;   //member for UPS status
+    QString m_srv_ip;
+    quint16 m_srv_port;
+    QString m_srv_username;
+    QString m_srv_auth;
+    QString m_srv_prv;
+
 
 
 

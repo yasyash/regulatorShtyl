@@ -78,6 +78,29 @@ processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_pare
         }
     }
 
+    m_srv_ip = cmdline_args.value(cmdline_args.indexOf("-srvip") +1);
+    if (m_ups_ip == "")
+    {
+        qDebug ( "IP address of Server is not set.\n\r");
+    }
+    else
+    {
+
+        m_srv_port = cmdline_args.value(cmdline_args.indexOf("-srvport") +1).toUShort();
+        if (m_ups_port <= 0)
+        {
+            qDebug ("Server SNMP port error:  expected parameter\n\r");
+        }
+        else
+        {
+            m_srv_username = cmdline_args.value(cmdline_args.indexOf("-srvuser") +1);
+            // m_srv_auth =  cmdline_args.value(cmdline_args.indexOf("-srvauth") +1);
+            //   m_srv_prv = cmdline_args.value(cmdline_args.indexOf("-srvprv") +1);
+            m_srv = new ups_status(&m_srv_ip, &m_srv_port, &m_srv_username, 2);
+            //qDebug() << "UPS model: "<< QString::fromStdString(m_ups->m_model->getValue().data()[0]) <<"\n Voltage: "
+            //<< QString::fromStdString(m_ups->m_voltage->getValue().data()[0]);
+        }
+    }
 
     QString dbhost = cmdline_args.value(cmdline_args.indexOf("-dbhost") +1);
     if (dbhost == "")
@@ -142,8 +165,10 @@ processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_pare
         //releaseModbus();
 
         qDebug() << ( QString("Connection error: " + m_conn->lastError().text()).toLatin1().constData()) <<   " \n\r";
-        exit(-1);
 
+    } else {
+        qDebug() << "Connected... ";
+        is_conn = true;
     }
 
 
@@ -165,9 +190,13 @@ processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_pare
 
     //this->ms_data = new  QMap<QString, int>;
     //this->ms_measure =  new QMap<QString, int>;
-
-    startTransactTimer(m_conn);    //start transaction timer
-
+    if (is_conn){
+        startTransactTimer(m_conn);    //start transaction timer
+    } else {
+        {
+            m_transactTimer->start(60000   );
+        }
+    }
     //range coefficients init
     m_range = new QMap<QString, int>;
     //this-> ms_range = new QMap<QString, int>;
@@ -242,6 +271,65 @@ void processor::transactionDB(void)
         //qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
     }
 
+    if (!is_conn) {
+        if (!m_conn->isOpen())
+            m_conn->open();
+
+        if(!m_conn->isOpen())
+        {
+            qDebug() << "Unable to reopen database connection and reload sensors!\n\r";
+        } else {
+            startTransactTimer(m_conn);    //reload sensors and restart transaction timer
+            is_conn = true;
+            qDebug() << "Database reconnection and reload sensors is done!\n\r";
+
+        }
+
+        if (m_ups)
+        {
+            bool _status = m_ups->read_output_status();
+            if (_status){//if output is connected
+                qDebug() << "Output is work!\n\r";
+
+
+            } else {
+                if (m_ups->ext_temp > 10){//if output is not connected
+                    m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","1");
+                    m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+
+
+                }
+
+                qDebug() << "Output is not work!\n\r";
+
+            }
+        }
+
+        if (m_srv)
+        {
+            if (!m_srv->status)
+            {
+                //m_srv->snmp_reinit(&m_srv_ip, &m_srv_port, &m_srv_username, 2);
+            } else {
+                bool _statussrv = m_srv->read_srv_status();
+                if (_statussrv){//if output is connected
+                    qDebug() << "Server is work!\n\r";
+
+
+                } else {
+                    if (m_ups->ext_temp > 10){//if output is not connected
+                        m_srv->set_data_int(".1.3.6.1.4.1.21317.1.4.0","1");
+
+                        qDebug() << "Server is started via SNMP!\n\r";
+                    }
+
+                    qDebug() << "Server is not work!\n\r";
+
+                }
+            }
+        }
+    }
+
     //Sensor data processing
     for (sensor = m_uuid->begin(); sensor != m_uuid->end(); ++sensor)
     {
@@ -297,102 +385,108 @@ void processor::transactionDB(void)
         }
         else
         {
-            QSqlQuery *queryt = new QSqlQuery ("select * from sensors_data where serialnum = '"+ QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) +"' order by date_time desc", *m_conn);
-            queryt->first();
-            QSqlRecord rec = queryt->record();
-            m_data->insert("Темп. внутренняя", rec.field("measure").value().toFloat());
-            qDebug() << "Темп. внутренняя = "<< rec.field("measure").value().toFloat() << " C.";
-            queryt->finish();
+            if (is_conn) { //member's properties
+                QSqlQuery *queryt = new QSqlQuery ("select * from sensors_data where serialnum = '"+ QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) +"' order by date_time desc", *m_conn);
+                queryt->first();
+                QSqlRecord rec = queryt->record();
+                m_data->insert("Темп. внутренняя", rec.field("measure").value().toFloat());
+                qDebug() << "Темп. внутренняя = "<< rec.field("measure").value().toFloat() << " C.";
+                qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
 
-            queryt = new QSqlQuery ("select * from stations where idd = '"+ QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) +"'", *m_conn);
-            queryt->first();
-            rec = queryt->record();
-            queryt->finish();
+                queryt->finish();
 
-
-
-            //if temperature measures don't correlate
-            if (abs(m_data->value("Темп. сенсор ИБП") - m_data->value("Темп. внутренняя")) > 10)
-            {
-
-                query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                  "VALUES ( :date_time, :type, :descr)");
-                query_log.bindValue(":date_time", tmp_time );
-                query_log.bindValue( ":type", 404 );
-                query_log.bindValue(":descr", "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString());
-                query_log.exec();
-                query_log.finish();
-
-                qDebug() << "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString();
-
-            }
-
-            else
-            {
-                if (m_ups->ext_temp > 45){ //if temperature is too high
-                    m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                    m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+                queryt = new QSqlQuery ("select * from stations where idd = '"+ QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) +"'", *m_conn);
+                queryt->first();
+                rec = queryt->record();
+                queryt->finish();
 
 
-                    query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                      "VALUES ( :date_time, :type, :descr)");
-                    query_log.bindValue(":date_time", tmp_time );
-                    query_log.bindValue( ":type", 120 );
-                    query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического превышения температуры более 45 градусов Цельсия на " + rec.field("namestation").value().toString());
-                    query_log.exec();
-                    query_log.finish();
 
-                    qDebug() << "Электропитание оборудования отключено по причине критического превышения температуры более 45 градусов Цельсия на  " + rec.field("namestation").value().toString();
-
-                }
-
-                if (m_ups->ext_temp > 40){ //if temperature is high
-
-
+                //if temperature measures don't correlate
+                if (abs(m_data->value("Темп. сенсор ИБП") - m_data->value("Темп. внутренняя")) > 10)
+                {
 
                     query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
                                       "VALUES ( :date_time, :type, :descr)");
                     query_log.bindValue(":date_time", tmp_time );
                     query_log.bindValue( ":type", 404 );
-                    query_log.bindValue(":descr", "Зафиксировано превышение температуры более 40 градусов Цельсия на " + rec.field("namestation").value().toString());
+                    query_log.bindValue(":descr", "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString());
                     query_log.exec();
                     query_log.finish();
 
-                    qDebug() << "Зафиксировано на ИБП превышение температуры более 40 градусов Цельсия на " + rec.field("namestation").value().toString();
+                    qDebug() << "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString();
 
                 }
 
-                if (m_ups->ext_temp < 2 ){ //if temperature is too low
-                    m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                    m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+                else
+                {
+                    if (m_ups->ext_temp > 45){ //if temperature is too high
+                        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
 
 
-                    query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                      "VALUES ( :date_time, :type, :descr)");
-                    query_log.bindValue(":date_time", tmp_time );
-                    query_log.bindValue( ":type", 120 );
-                    query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического понижения температуры менее 2 градусов Цельсия на " + rec.field("namestation").value().toString());
-                    query_log.exec();
-                    query_log.finish();
+                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                          "VALUES ( :date_time, :type, :descr)");
+                        query_log.bindValue(":date_time", tmp_time );
+                        query_log.bindValue( ":type", 120 );
+                        query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического превышения температуры более 45 градусов Цельсия на " + rec.field("namestation").value().toString());
+                        query_log.exec();
+                        query_log.finish();
 
-                    qDebug() << "Электропитание оборудования отключено по причине критического понижения температуры менее 2 градусов Цельсия на " + rec.field("namestation").value().toString();
+                        qDebug() << "Электропитание оборудования отключено по причине критического превышения температуры более 45 градусов Цельсия на  " + rec.field("namestation").value().toString();
 
-                }
-                if (m_ups->ext_temp < 10){ //if temperature is low
+                    }
+
+                    if (m_ups->ext_temp > 40){ //if temperature is high
 
 
-                    query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                      "VALUES ( :date_time, :type, :descr)");
-                    query_log.bindValue(":date_time", tmp_time );
-                    query_log.bindValue( ":type", 404 );
-                    query_log.bindValue(":descr", "Зафиксировано на ИБП понижение температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString());
-                    query_log.exec();
-                    query_log.finish();
 
-                    qDebug() << "Зафиксировано понижение температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString();
+                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                          "VALUES ( :date_time, :type, :descr)");
+                        query_log.bindValue(":date_time", tmp_time );
+                        query_log.bindValue( ":type", 404 );
+                        query_log.bindValue(":descr", "Зафиксировано превышение температуры более 40 градусов Цельсия на " + rec.field("namestation").value().toString());
+                        query_log.exec();
+                        query_log.finish();
+
+                        qDebug() << "Зафиксировано на ИБП превышение температуры более 40 градусов Цельсия на " + rec.field("namestation").value().toString();
+
+                    }
+
+                    if (m_ups->ext_temp < 2 ){ //if temperature is too low
+                        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+
+
+                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                          "VALUES ( :date_time, :type, :descr)");
+                        query_log.bindValue(":date_time", tmp_time );
+                        query_log.bindValue( ":type", 120 );
+                        query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического понижения температуры менее 2 градусов Цельсия на " + rec.field("namestation").value().toString());
+                        query_log.exec();
+                        query_log.finish();
+
+                        qDebug() << "Электропитание оборудования отключено по причине критического понижения температуры менее 2 градусов Цельсия на " + rec.field("namestation").value().toString();
+
+                    }
+                    if (m_ups->ext_temp < 10){ //if temperature is low
+
+
+                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                          "VALUES ( :date_time, :type, :descr)");
+                        query_log.bindValue(":date_time", tmp_time );
+                        query_log.bindValue( ":type", 404 );
+                        query_log.bindValue(":descr", "Зафиксировано на ИБП понижение температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString());
+                        query_log.exec();
+                        query_log.finish();
+
+                        qDebug() << "Зафиксировано понижение температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString();
+
+                    }
 
                 }
             }
+
 
         }
     }

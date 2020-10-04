@@ -42,9 +42,14 @@ class ups_status
 
 public:
     explicit ups_status( QString *ip, quint16 *port, QString *ups_username);
+    explicit ups_status( QString *ip, quint16 *port, QString *ups_username, int version_snmp);
+
     ~ups_status();
     void read_voltage();
     void read_ext_temp();
+    bool read_output_status();
+    bool read_srv_status();
+    void snmp_reinit( QString *ip, quint16 *port, QString *ups_username, int version_snmp);
 
 public:
     struct snmp_session session, *ss;
@@ -55,7 +60,7 @@ public:
     size_t anOID_len = MAX_OID_LEN;
 
     struct variable_list *vars;
-    int status;
+    int status = 0;
     int err_count = 1;
 
     QString *addr;
