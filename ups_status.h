@@ -75,7 +75,7 @@ public:
     int ext_sensor = 1;
     int ext_temp;
 
-    bool is_read;
+    bool is_read = false;
     uint sample_t;
     QMap<QString, float> *measure;
 
