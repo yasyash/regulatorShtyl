@@ -306,6 +306,8 @@ void ups_status::read_ext_temp()
     if (vars)
     {
         ext_temp = (*vars->val.integer);
+        if (ext_temp > 1000)
+            ext_temp = (-4096 + ext_temp);
         //measure->insert("Напряжение", voltage);
     }
 
