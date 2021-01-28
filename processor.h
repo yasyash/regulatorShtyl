@@ -29,6 +29,7 @@
 
 
 #include "ups_status.h"
+#include "meteotcpsock.h"
 
 class processor : public QObject
 {
@@ -97,8 +98,11 @@ private:
 
     QString _command;
 
+    MeteoTcpSock *m_meteo = nullptr; //member for Meteostation
+    QString m_meteo_ip;
+    quint16 m_meteo_port;
 
-
+    QStringList cmdline_args ;
 
 };
 

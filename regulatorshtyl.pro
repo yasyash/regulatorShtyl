@@ -27,7 +27,8 @@ SOURCES += \
         main.cpp \
     ups_status.cpp \
     service.cpp \
-    processor.cpp
+    processor.cpp \
+    meteotcpsock.cpp
 
 
 
@@ -37,6 +38,7 @@ HEADERS += \
     service.h \
     processor.h \
     ups_status.h \
-    processor.h
+    processor.h \
+    meteotcpsock.h
 
 LIBS += -lnetsnmp -ltelnet -lnetsnmpmibs
