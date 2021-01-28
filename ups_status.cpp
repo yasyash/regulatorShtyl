@@ -305,9 +305,12 @@ void ups_status::read_ext_temp()
     vars = get_data((char*)".1.3.6.1.4.1.34498.2.6.1.11.3.0"); //read ext. temperature
     if (vars)
     {
-        ext_temp = (*vars->val.integer);
-        if (ext_temp > 1000)
-            ext_temp = (-4096 + ext_temp);
+        int _ext_temp = (*vars->val.integer);
+        if (_ext_temp > 1000)
+            ext_temp = (-4096 + _ext_temp);
+        else {
+            ext_temp = _ext_temp;
+        }
         //measure->insert("Напряжение", voltage);
     }
 

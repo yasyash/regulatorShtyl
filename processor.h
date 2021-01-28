@@ -67,8 +67,8 @@ private:
     QTimer * m_pollTimer;
 
     QTimer * m_transactTimer; //timer for trunsaction
-    int m_watchdogTimerHigh = 0; //counter for hight temp shutdown (20 minutes)
-    int m_watchdogTimerLow = 0; //counter for low temp shutdown (20 minutes)
+    int m_watchdogTimerHigh = 0; //counter for hight temp shutdown (5 minutes)
+    int m_watchdogTimerLow = 0; //counter for low temp shutdown (5 minutes)
 
     QMap<QString, float>   * m_data; //assosiative array of polling data
     QMap<QString, int>   * m_measure; //assosiative array of measurement quantities

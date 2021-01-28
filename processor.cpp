@@ -397,6 +397,7 @@ void processor::transactionDB(void)
         //qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
     }
 
+    is_conn = m_conn->isOpen();
     if (!is_conn) {
         if (!m_conn->isOpen())
             m_conn->open();
@@ -491,7 +492,7 @@ void processor::transactionDB(void)
 
             } else {
                 if (m_meteo){
-                    float _temp_in = m_meteo->measure->value("temp_in") / m_meteo->sample_t;
+                    float _temp_in = m_meteo->measure->value("temp_in");//momental measure
                     if (( _temp_in > 14.9f) && (_temp_in < 35.01f))
                     {//if output is not connected
                         m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","1");
@@ -526,7 +527,7 @@ void processor::transactionDB(void)
             }
         }
 
-        if (m_srv)
+        if (m_srv) //try to start server
         {
             if (!m_srv->status)
             {
@@ -538,279 +539,358 @@ void processor::transactionDB(void)
 
 
                 } else {
-                    if (m_ups->ext_temp > 10){//if output is not connected
-                        m_srv->set_data_int(".1.3.6.1.4.1.21317.1.4.0","1");
+                    if (m_meteo){
+                        float _temp_in = m_meteo->measure->value("temp_in");//momental measure
+                        if (( _temp_in > 14.9f) && (_temp_in < 35.01f))
+                        {//if meteostation exist
+                            m_srv->set_data_int(".1.3.6.1.4.1.21317.1.4.0","1");
 
-                        qDebug() << "Server is started via SNMP!\n\r";
+                            qDebug() << "Server is starting via SNMP!\n\r";
+                        }
+                    } else {
+                        if ((m_ups->ext_temp > 14)&&(m_ups->ext_temp < 36)){//if meteostation is not connected
+                            m_srv->set_data_int(".1.3.6.1.4.1.21317.1.4.0","1");
+
+                            qDebug() << "Server is starting via SNMP!\n\r";
+                        }
                     }
 
-                    qDebug() << "Server is not work! Try to start!\n\r";
-
                 }
+
+                qDebug() << "Server is not work! Try to start!\n\r";
+
             }
         }
     }
 
-    //Sensor data processing
-    for (sensor = m_uuid->begin(); sensor != m_uuid->end(); ++sensor)
+
+//Sensor data processing
+for (sensor = m_uuid->begin(); sensor != m_uuid->end(); ++sensor)
+{
+    _key = sensor.key();
+    if (_key != "Темп. внутренняя")
     {
-        _key = sensor.key();
-        if (_key != "Темп. внутренняя")
+        query.prepare("INSERT INTO sensors_data (idd, serialnum, date_time, typemeasure, measure, is_alert) "
+                      "VALUES (:idd, :serialnum, :date_time, :typemeasure, :measure, false)");
+
+
+        query.bindValue(":idd", QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")));
+        query.bindValue(":serialnum",  QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")));
+        query.bindValue(":date_time", tmp_time);
+        query.bindValue(":typemeasure", sensor.key());
+        query.bindValue(":measure", m_data->value(sensor.key()) );
+        qDebug() << "\n\rTransaction prepare: \n\r idd === "<< QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) << "\n\r serial === " <<  QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) <<
+                    "\n\r date_time ===" << QDateTime::currentDateTime().toString( "yyyy-MM-ddThh:mm:ss") << "\n\r typemeasure " <<  sensor.key() <<
+                    "\n\r measure ===" << m_data->value(sensor.key()) <<"\n\r";
+        if (!m_conn->isOpen())
+            m_conn->open();
+
+        if(!m_conn->isOpen())
         {
-            query.prepare("INSERT INTO sensors_data (idd, serialnum, date_time, typemeasure, measure, is_alert) "
-                          "VALUES (:idd, :serialnum, :date_time, :typemeasure, :measure, false)");
-
-
-            query.bindValue(":idd", QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")));
-            query.bindValue(":serialnum",  QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")));
-            query.bindValue(":date_time", tmp_time);
-            query.bindValue(":typemeasure", sensor.key());
-            query.bindValue(":measure", m_data->value(sensor.key()) );
-            qDebug() << "\n\rTransaction prepare: \n\r idd === "<< QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) << "\n\r serial === " <<  QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) <<
-                        "\n\r date_time ===" << QDateTime::currentDateTime().toString( "yyyy-MM-ddThh:mm:ss") << "\n\r typemeasure " <<  sensor.key() <<
-                        "\n\r measure ===" << m_data->value(sensor.key()) <<"\n\r";
-            if (!m_conn->isOpen())
-                m_conn->open();
-
-            if(!m_conn->isOpen())
-            {
-                qDebug() << "Unable to reopen database connection!\n\r";
-            }
-            else
-            {
-                if (verbose)
-                {
-                    qDebug() << "Transaction status is " << ((query.exec() == true) ? "successful!\n\r" :  "not complete! \n\r");
-                    qDebug() << "The last error is " << (( query.lastError().text().trimmed() == "") ? "absent " : query.lastError().text()) << "\n\r";
-                }
-                else
-                {
-                    if (query.exec())
-                    {
-                        qDebug() << "Insertion is successful!\n\r";
-                    }
-                    else
-                    {
-                        qDebug() << "Insertion is not successful!\n\r";
-
-                    }
-                }
-
-                query.finish();
-                //  query.~QSqlQuery();
-
-                //m_data->remove(sensor.key());
-                //m_measure->remove(sensor.key());
-
-            }
+            qDebug() << "Unable to reopen database connection!\n\r";
         }
         else
         {
-            if (is_conn) { //member's properties
-                QSqlQuery *queryt = new QSqlQuery ("select * from sensors_data where serialnum = '"+ QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) +"' order by date_time desc", *m_conn);
-                queryt->first();
-                QSqlRecord rec = queryt->record();
-                m_data->insert("Темп. внутренняя", rec.field("measure").value().toFloat());
-                qDebug() << "Темп. внутренняя = "<< rec.field("measure").value().toFloat() << " C.";
-                qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
-
-                queryt->finish();
-
-                queryt = new QSqlQuery ("select * from stations where idd = '"+ QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) +"'", *m_conn);
-                queryt->first();
-                rec = queryt->record();
-                queryt->finish();
-
-
-
-                //if temperature measures don't correlate
-                if (abs(m_data->value("Темп. сенсор ИБП") - m_data->value("Темп. внутренняя")) > 10)
+            if (verbose)
+            {
+                qDebug() << "Transaction status is " << ((query.exec() == true) ? "successful!\n\r" :  "not complete! \n\r");
+                qDebug() << "The last error is " << (( query.lastError().text().trimmed() == "") ? "absent " : query.lastError().text()) << "\n\r";
+            }
+            else
+            {
+                if (query.exec())
                 {
+                    qDebug() << "Insertion is successful!\n\r";
+                }
+                else
+                {
+                    qDebug() << "Insertion is not successful!\n\r";
+
+                }
+            }
+
+            query.finish();
+            //  query.~QSqlQuery();
+
+            //m_data->remove(sensor.key());
+            //m_measure->remove(sensor.key());
+
+        }
+    }
+    else
+    {
+        if (is_conn) { //member's properties
+            QSqlQuery *queryt = new QSqlQuery ("select * from sensors_data where serialnum = '"+ QString(m_uuid->value(sensor.key()).toString()).remove(QRegExp("[\\{\\}]")) +"' order by date_time desc", *m_conn);
+            queryt->first();
+            QSqlRecord rec = queryt->record();
+            m_data->insert("Темп. внутренняя", rec.field("measure").value().toFloat());
+            qDebug() << "Темп. внутренняя = "<< rec.field("measure").value().toFloat() << " C.";
+            qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
+
+            queryt->finish();
+
+            queryt = new QSqlQuery ("select * from stations where idd = '"+ QString(m_uuidStation->toString()).remove(QRegExp("[\\{\\}]")) +"'", *m_conn);
+            queryt->first();
+            rec = queryt->record();
+            queryt->finish();
+
+
+
+            //if temperature measures don't correlate
+            if (abs(m_data->value("Темп. сенсор ИБП") - m_data->value("Темп. внутренняя")) > 10)
+            {
+
+                query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                  "VALUES ( :date_time, :type, :descr)");
+                query_log.bindValue(":date_time", tmp_time );
+                query_log.bindValue( ":type", 404 );
+                query_log.bindValue(":descr", "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString());
+                query_log.exec();
+                query_log.finish();
+
+                qDebug() << "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString();
+
+            }
+
+
+
+            if (m_data->value("Темп. внутренняя") > 35){ //if temperature is too high
+
+                if (m_watchdogTimerHigh > 5){
+
 
                     query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
                                       "VALUES ( :date_time, :type, :descr)");
                     query_log.bindValue(":date_time", tmp_time );
-                    query_log.bindValue( ":type", 404 );
-                    query_log.bindValue(":descr", "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString());
+                    query_log.bindValue( ":type", 120 );
+                    query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического превышения температуры более 35 градусов Цельсия на " + rec.field("namestation").value().toString());
                     query_log.exec();
                     query_log.finish();
 
-                    qDebug() << "Расхождение измерений температуры метеокомплекса и ИБП более 10 градусов на " + rec.field("namestation").value().toString();
+                    //m_conn->close();
 
-                }
+                    m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                    m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
 
-                else
-                {
-                    if (m_data->value("Темп. внутренняя") > 35){ //if temperature is too high
+                    qDebug() << "Электропитание оборудования отключено по причине критического превышения температуры более 35 градусов Цельсия на  " + rec.field("namestation").value().toString();
 
-                        if (m_watchdogTimerHigh > 5){
+                    if (!m_meteo)
+                    {
+                        // Meteostation init
+                        //  -meteoip 192.168.1.200 -meteoport 22222
 
-
-                            query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                              "VALUES ( :date_time, :type, :descr)");
-                            query_log.bindValue(":date_time", tmp_time );
-                            query_log.bindValue( ":type", 120 );
-                            query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического превышения температуры более 35 градусов Цельсия на " + rec.field("namestation").value().toString());
-                            query_log.exec();
-                            query_log.finish();
-
-                            //m_conn->close();
-
-                            m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                            m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
-
-                            qDebug() << "Электропитание оборудования отключено по причине критического превышения температуры более 35 градусов Цельсия на  " + rec.field("namestation").value().toString();
-                            if (!m_meteo)
+                        m_meteo_ip = cmdline_args.value(cmdline_args.indexOf("-meteoip") +1);
+                        if (m_meteo_ip == "")
+                        {
+                            qDebug ( "IP address of meteostation is not set.\n\r");
+                        }
+                        else
+                        {
+                            m_meteo_port = cmdline_args.value(cmdline_args.indexOf("-meteoport") +1).toUShort();
+                            if (m_meteo_port <= 0)
                             {
-                                // Meteostation init
-                                //  -meteoip 192.168.1.200 -meteoport 22222
+                                qDebug ( "Port of meteostation is not set.");
+                            }
+                            else
+                            {
+                                QString meteoparams = cmdline_args.value(cmdline_args.indexOf("-meteoparams") +1);
 
-                                m_meteo_ip = cmdline_args.value(cmdline_args.indexOf("-meteoip") +1);
-                                if (m_meteo_ip == "")
-                                {
-                                    qDebug ( "IP address of meteostation is not set.\n\r");
+
+
+                                QSqlQuery *query= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внутренняя' order by date_time desc", *m_conn);
+                                qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
+                                query->first();
+                                QSqlRecord rec = query->record();
+
+                                float temp_in = (rec.field("measure").value().toFloat());
+                                query->finish();
+
+                                QSqlQuery *queryout= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внешняя' order by date_time desc", *m_conn);
+                                qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
+                                queryout->first();
+                                rec = queryout->record();
+
+                                float temp_out = (rec.field("measure").value().toFloat());
+                                query->finish();
+
+
+                                QString model="";
+                                if (cmdline_args.indexOf("-meteomodel") > -1){
+                                    model = cmdline_args.value(cmdline_args.indexOf("-meteomodel") +1);
                                 }
-                                else
-                                {
-                                    m_meteo_port = cmdline_args.value(cmdline_args.indexOf("-meteoport") +1).toUShort();
-                                    if (m_meteo_port <= 0)
+
+                                if (model == ""){
+                                    if (meteoparams == "db")
                                     {
-                                        qDebug ( "Port of meteostation is not set.");
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out);
+                                    } else{
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port);
                                     }
-                                    else
+
+                                } else {
+                                    if (meteoparams == "db")
                                     {
-                                        QString meteoparams = cmdline_args.value(cmdline_args.indexOf("-meteoparams") +1);
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out, &model);
+                                    } else {
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, &model);
 
-
-
-                                        QSqlQuery *query= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внутренняя' order by date_time desc", *m_conn);
-                                        qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
-                                        query->first();
-                                        QSqlRecord rec = query->record();
-
-                                        float temp_in = (rec.field("measure").value().toFloat());
-                                        query->finish();
-
-                                        QSqlQuery *queryout= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внешняя' order by date_time desc", *m_conn);
-                                        qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
-                                        queryout->first();
-                                        rec = queryout->record();
-
-                                        float temp_out = (rec.field("measure").value().toFloat());
-                                        query->finish();
-
-
-                                        QString model="";
-                                        if (cmdline_args.indexOf("-meteomodel") > -1){
-                                            model = cmdline_args.value(cmdline_args.indexOf("-meteomodel") +1);
-                                        }
-
-                                        if (model == ""){
-                                            if (meteoparams == "db")
-                                            {
-                                                m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out);
-                                            } else{
-                                                m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port);
-                                            }
-
-                                        } else {
-                                            if (meteoparams == "db")
-                                            {
-                                                m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out, &model);
-                                            } else {
-                                                m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, &model);
-
-                                            }
-
-                                        }
                                     }
 
                                 }
-
                             }
+
                         }
-                        qDebug() << "\n\rTemperature dangerous state is " << m_watchdogTimerHigh << " minutes\n\r";
-                        m_watchdogTimerHigh++;
-
-
-
-                    } else {
-                        m_watchdogTimerHigh = 0;
-                    }
-
-                    if (m_data->value("Темп. внутренняя") > 30){ //if temperature is high
-
-                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                          "VALUES ( :date_time, :type, :descr)");
-                        query_log.bindValue(":date_time", tmp_time );
-                        query_log.bindValue( ":type", 404 );
-                        query_log.bindValue(":descr", "Зафиксировано превышение температуры более 30 градусов Цельсия на " + rec.field("namestation").value().toString());
-                        query_log.exec();
-                        query_log.finish();
-
-                        qDebug() << "Зафиксировано на ИБП превышение температуры более 30 градусов Цельсия на " + rec.field("namestation").value().toString();
-
-                    }
-
-                    if (m_data->value("Темп. внутренняя") < 15 ){ //if temperature is too low
-                        if (m_watchdogTimerLow > 5){ //waiting 5 minutes and shutdown
-
-                            query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                              "VALUES ( :date_time, :type, :descr)");
-                            query_log.bindValue(":date_time", tmp_time );
-                            query_log.bindValue( ":type", 120 );
-                            query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического понижения температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString());
-                            query_log.exec();
-                            query_log.finish();
-
-                            //m_conn->close();
-
-                            m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                            m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
-
-
-                            qDebug() << "Электропитание оборудования отключено по причине критического понижения температуры менее 10 градусов Цельсия на " + rec.field("namestation").value().toString();
-
-                            if (!m_meteo)
-                            {
-
-                            }
-                        }
-                        qDebug() << "\n\rTemperature dangerous state is " << m_watchdogTimerLow << " minutes\n\r";
-
-                        m_watchdogTimerLow++;
-
-
-
-                    } else {
-                        m_watchdogTimerLow = 0;
-                    }
-
-                    if (m_data->value("Темп. внутренняя") < 15){ //if temperature is low
-
-
-                        query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
-                                          "VALUES ( :date_time, :type, :descr)");
-                        query_log.bindValue(":date_time", tmp_time );
-                        query_log.bindValue( ":type", 404 );
-                        query_log.bindValue(":descr", "Зафиксировано на ИБП понижение температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString());
-                        query_log.exec();
-                        query_log.finish();
-
-                        qDebug() << "Зафиксировано понижение температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
 
                     }
 
                 }
+                qDebug() << "\n\rTemperature dangerous state is " << m_watchdogTimerHigh << " minutes\n\r";
+                m_watchdogTimerHigh++;
+
+
+
+            } else {
+                m_watchdogTimerHigh = 0;
+            }
+
+            if (m_data->value("Темп. внутренняя") > 30){ //if temperature is high
+
+                query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                  "VALUES ( :date_time, :type, :descr)");
+                query_log.bindValue(":date_time", tmp_time );
+                query_log.bindValue( ":type", 404 );
+                query_log.bindValue(":descr", "Зафиксировано превышение температуры более 30 градусов Цельсия на " + rec.field("namestation").value().toString());
+                query_log.exec();
+                query_log.finish();
+
+                qDebug() << "Зафиксировано на ИБП превышение температуры более 30 градусов Цельсия на " + rec.field("namestation").value().toString();
+
+            }
+
+            if (m_data->value("Темп. внутренняя") < 15 ){ //if temperature is too low
+                if (m_watchdogTimerLow > 5){ //waiting 5 minutes and shutdown
+
+                    query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                      "VALUES ( :date_time, :type, :descr)");
+                    query_log.bindValue(":date_time", tmp_time );
+                    query_log.bindValue( ":type", 120 );
+                    query_log.bindValue(":descr", "Электропитание оборудования отключено по причине критического понижения температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString());
+                    query_log.exec();
+                    query_log.finish();
+
+                    //m_conn->close();
+
+                    m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                    m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+
+
+                    qDebug() << "Электропитание оборудования отключено по причине критического понижения температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
+
+                    if (!m_meteo)
+                    {
+                        // Meteostation init
+                        //  -meteoip 192.168.1.200 -meteoport 22222
+
+                        m_meteo_ip = cmdline_args.value(cmdline_args.indexOf("-meteoip") +1);
+                        if (m_meteo_ip == "")
+                        {
+                            qDebug ( "IP address of meteostation is not set.\n\r");
+                        }
+                        else
+                        {
+                            m_meteo_port = cmdline_args.value(cmdline_args.indexOf("-meteoport") +1).toUShort();
+                            if (m_meteo_port <= 0)
+                            {
+                                qDebug ( "Port of meteostation is not set.");
+                            }
+                            else
+                            {
+                                QString meteoparams = cmdline_args.value(cmdline_args.indexOf("-meteoparams") +1);
+
+
+
+                                QSqlQuery *query= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внутренняя' order by date_time desc", *m_conn);
+                                qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
+                                query->first();
+                                QSqlRecord rec = query->record();
+
+                                float temp_in = (rec.field("measure").value().toFloat());
+                                query->finish();
+
+                                QSqlQuery *queryout= new QSqlQuery ("select * from sensors_data where typemeasure = 'Темп. внешняя' order by date_time desc", *m_conn);
+                                qDebug() << "Temp. inner status is " <<   query->isActive()<< " and err " << query->lastError().text() << "\n\r";
+                                queryout->first();
+                                rec = queryout->record();
+
+                                float temp_out = (rec.field("measure").value().toFloat());
+                                query->finish();
+
+
+                                QString model="";
+                                if (cmdline_args.indexOf("-meteomodel") > -1){
+                                    model = cmdline_args.value(cmdline_args.indexOf("-meteomodel") +1);
+                                }
+
+                                if (model == ""){
+                                    if (meteoparams == "db")
+                                    {
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out);
+                                    } else{
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port);
+                                    }
+
+                                } else {
+                                    if (meteoparams == "db")
+                                    {
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, temp_in, temp_out, &model);
+                                    } else {
+                                        m_meteo = new MeteoTcpSock(this, &m_meteo_ip, &m_meteo_port, &model);
+
+                                    }
+
+                                }
+                            }
+
+                        }
+
+                    }
+
+                }
+                qDebug() << "\n\rTemperature dangerous state is " << m_watchdogTimerLow << " minutes\n\r";
+
+                m_watchdogTimerLow++;
+
+
+
+            } else {
+                m_watchdogTimerLow = 0;
+            }
+
+            if (m_data->value("Темп. внутренняя") < 15){ //if temperature is low
+
+
+                query_log.prepare("INSERT INTO logs (date_time, type, descr ) "
+                                  "VALUES ( :date_time, :type, :descr)");
+                query_log.bindValue(":date_time", tmp_time );
+                query_log.bindValue( ":type", 404 );
+                query_log.bindValue(":descr", "Зафиксировано на ИБП понижение температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString());
+                query_log.exec();
+                query_log.finish();
+
+                qDebug() << "Зафиксировано понижение температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
+
             }
 
 
         }
+
+
     }
+}
 
 
 
-    //  m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","0");
+//  m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","0");
 }
 void processor::startTransactTimer( QSqlDatabase *conn) //start by signal dbForm
 {

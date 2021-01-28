@@ -417,10 +417,10 @@ void MeteoTcpSock::readData()
                 // measure_prev->insert("temp_in",23.0f);
 
                 if (_result < 60) {
-                    measure->insert("temp_in",  measure->value("temp_in") +_result);}
+                    measure->insert("temp_in",  _result);}
                 else
                 {
-                    measure->insert("temp_in",  measure->value("temp_in") + measure_prev->value("temp_in"));
+                    measure->insert("temp_in",  measure_prev->value("temp_in"));
                 }
             }
             else
@@ -433,7 +433,7 @@ void MeteoTcpSock::readData()
 
                 measure_prev->insert("temp_in",_result);
 
-                measure->insert("temp_in", measure->value("temp_in") + _result);
+                measure->insert("temp_in",  _result);
             }
             qDebug() << "Meteostation's temperature is " << _result;
             sample_t++;
