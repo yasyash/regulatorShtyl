@@ -30,6 +30,7 @@
 
 #include "ups_status.h"
 #include "meteotcpsock.h"
+#include "ivtm.h"
 
 class processor : public QObject
 {
@@ -82,7 +83,13 @@ private:
     QUuid * m_uuidStation;
     bool is_conn = false;
 
-    bool verbose; //verbose mode flag
+    bool verbose = false; //verbose mode flag
+
+    ivtm *m_ivtm = nullptr;
+    QString m_ivtm_ip;
+    quint16 m_ivtm_port;
+    quint16 m_ivtm_address;
+    quint16 m_ivtm_length;
 
     ups_status *m_ups = nullptr;   //member for UPS status
     QString m_ups_ip;

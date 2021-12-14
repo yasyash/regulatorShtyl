@@ -425,7 +425,7 @@ void MeteoTcpSock::readData()
             }
             else
             {
-                _result = compare (_result, measure_prev->value("temp_in"), 0.05f);
+                _result = compare (_result, measure_prev->value("temp_in"), 0.25f);
                 if (_result < 0.0f)
                     _result = measure_prev->value("temp_in");
                 if (_result > 60.0f)

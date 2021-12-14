@@ -1,15 +1,16 @@
-QT += core sql network
+QT += core sql network serialbus
+
 QT -= gui
 CONFIG +=  console
 CONFIG -= app_bundle
 TEMPLATE = app
-VERSION = 0.0.1
+VERSION = "1.1"
 TARGET = regulatorshtyl
 target.path = /home/pi/regulator # путь на устройстве
 INSTALLS += target
 
 
-include( common.pri )
+#include( common.pri )
 
 # The following define makes your compiler emit warnings if you use
 # any Qt feature that has been marked deprecated (the exact warnings
@@ -28,7 +29,8 @@ SOURCES += \
     ups_status.cpp \
     service.cpp \
     processor.cpp \
-    meteotcpsock.cpp
+    meteotcpsock.cpp \
+    ivtm.cpp
 
 
 
@@ -39,6 +41,9 @@ HEADERS += \
     processor.h \
     ups_status.h \
     processor.h \
-    meteotcpsock.h
+    meteotcpsock.h \
+    ivtm.h
 
 LIBS += -lnetsnmp -ltelnet -lnetsnmpmibs
+
+DEFINES += APP_VERSION=$$VERSION

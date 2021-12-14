@@ -191,12 +191,12 @@ ups_status::ups_status( QString *ip, quint16 *port, QString *ups_username, int v
         //snmp_sess_perror("ack", &session);
         //SOCK_CLEANUP;
         //exit(1);
-        qDebug() << "Server SNMP monitoring initialization with issues..."<< "\n\r";
+        qDebug() << "Server platform SNMP monitoring initialization with issues..."<< "\n\r";
         status = 0;
         return;
     }
     else {
-        qDebug() << "Server SNMP monitoring initialization complete..."<< "\n\r";
+        qDebug() << "Server platform SNMP monitoring initialization complete..."<< "\n\r";
         status = 1;
 
     }
