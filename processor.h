@@ -31,6 +31,7 @@
 #include "ups_status.h"
 #include "meteotcpsock.h"
 #include "ivtm.h"
+#include "ssh_cmd_ex.h"
 
 class processor : public QObject
 {
@@ -38,10 +39,6 @@ class processor : public QObject
 public:
     processor(QObject *_parent = 0,  QStringList *cmdline = 0 );
     ~processor();
-
-
-
-
 public:
     static QMap<QString, int>   * ms_data; //assosiative array of polling data
     static QMap<QString, int>   * ms_measure; //assosiative array of measurement quantities
@@ -64,7 +61,6 @@ private slots:
     void readSocketStatus(void);
 
 private:
-
     QTimer * m_pollTimer;
 
     QTimer * m_transactTimer; //timer for trunsaction
@@ -109,7 +105,17 @@ private:
     QString m_meteo_ip;
     quint16 m_meteo_port;
 
+    ssh_cmd_ex *m_ssh_cmdr = nullptr;
+    QString m_ssh_ip;
+    quint16 m_ssh_port;
+    QString m_ssh_user;
+    QString m_ssh_pwd;
+    QString m_ssh_command;
+
     QStringList cmdline_args ;
+
+private:
+    bool shutdown();
 
 };
 

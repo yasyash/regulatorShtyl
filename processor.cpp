@@ -26,6 +26,8 @@
 #include <QSqlRecord>
 #include <QSqlError>
 #include <QSqlField>
+#include <QThread>
+#include <QProcess>
 
 #include <errno.h>
 
@@ -41,7 +43,7 @@ QMap<QString, int> *processor::ms_measure = new QMap<QString, int>;
 //ms_range->insert("PM4", 1000);
 //ms_range->insert("PM10", 1000);
 
-processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_parent),
+processor::processor(QObject *_parent, QStringList *cmdline) : QObject (_parent),
     verbose(false)
 
 {
@@ -62,6 +64,45 @@ processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_pare
         qDebug () << "\n\r**********************************************************\n\r           Temperature SNMP driver version" <<   (APP_VERSION) << "\n\r*************************************************\n\r";
     }
 
+    //parse ssh parameters
+    if (cmdline_args.indexOf("-sship") > -1)
+        m_ssh_ip = cmdline_args.value(cmdline_args.indexOf("-sship") +1);
+    if (m_ssh_ip == "")
+    {
+        qDebug ( "SSH IP address is not set.\n\r");
+    }
+    else
+    {
+        m_ssh_port = cmdline_args.value(cmdline_args.indexOf("-sshport") +1).toUShort();
+        if (m_ssh_port <= 0)
+        {
+            qDebug ("SSH port error:  expected parameter\n\r");
+        }
+        else
+        {
+            m_ssh_user = cmdline_args.value(cmdline_args.indexOf("-sshuser") +1);
+            if (m_ssh_user == "")
+            {
+                qDebug ("SSH user error:  expected parameter\n\r");
+            } else {
+                m_ssh_pwd = cmdline_args.value(cmdline_args.indexOf("-sshpwd") +1);
+                if (m_ssh_pwd ==""){
+                    qDebug ("Password user error:  expected parameter\n\r");
+                }
+                //m_ssh_command = cmdline_args.value(cmdline_args.indexOf("-sshcommand") +1).toUShort();
+                // if (m_ssh_user == "")
+                // {
+                //    qDebug ("SSH command error:  expected parameter\n\r");
+                //} else {
+                m_ssh_cmdr = new ssh_cmd_ex(m_ssh_ip, m_ssh_port, m_ssh_user, m_ssh_pwd);
+                // }
+
+            }
+        }
+    }
+
+
+    //parse command
     int _ind = cmdline_args.indexOf("-command");
 
     if (_ind > -1){
@@ -300,7 +341,7 @@ processor::processor(QObject *_parent,    QStringList *cmdline) : QObject (_pare
         startTransactTimer(m_conn);    //start transaction timer
     } else {
         {
-            m_transactTimer->start(60000);
+            m_transactTimer->start(60000); //change
         }
     }
     //range coefficients init
@@ -370,13 +411,32 @@ void processor::transactionDB(void)
 
     qDebug() << "Напряжение мин. = "<< m_data->value("Напряжение мин.") << " В.\n\r" << "Напряжение макс. = "<< m_data->value("Напряжение макс.") << " В.\n\r";
     if (m_ups)
-    {
+    { //command execute
         if (_command == "down")
         {
-            m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-            m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
-            qDebug() << "UPS down command is executed...";
-            exit (-1);
+            QStringList params;
+
+            qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "host down");
+
+            params << "-c" <<"1"<< "-q" <<m_ssh_ip;
+
+            if ( m_ssh_cmdr->sshChannel_is_open())
+            {
+                m_ssh_cmdr->doCmd("/vmfs/volumes/datastore1/down.sh"); //remote script
+
+                while (QProcess::execute(QString("ping"), params ) == 0 ) {
+                }
+                qDebug() << "ESXi host is down...";
+
+                QThread::msleep(5000); //5 sec waiting for shutdown
+
+                m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+                qDebug() << "UPS down command is executed...";
+
+            }
+
+            exit (0);
         }
 
         if (_command == "rise")
@@ -384,7 +444,7 @@ void processor::transactionDB(void)
             m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","1");
             m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
             qDebug() << "UPS rise command is executed...";
-            exit (-1);
+            exit (0);
         }
 
         if (_command == "serverup")
@@ -392,10 +452,11 @@ void processor::transactionDB(void)
             if (m_srv){
                 m_srv->set_data_int(".1.3.6.1.4.1.21317.1.4.0","1");
                 qDebug() << "Server power on command is executed...";
-                exit (-1);
+                exit (0);
             }
 
         }
+        // end of command section
 
         m_ups->read_ext_temp();
         if (!m_ups->is_read)
@@ -424,7 +485,6 @@ void processor::transactionDB(void)
             m_data->insert("Темп. сенсор ИБП", m_ups->ext_temp);
             m_measure->insert("Темп. сенсор ИБП", 1); //we don't interested in average temperature - we need a value per sample
         }
-
 
         //qDebug() << "Темп. сенсор ИБП = "<< m_ups->ext_temp << " C.";
     }
@@ -660,13 +720,8 @@ void processor::transactionDB(void)
                             qDebug() << "Temperature on UPS temperature sensor is " << m_ups->ext_temp << " degrees Celcius\n\r";
 
                         }
-
-
-
                     }
-
                 }
-
                 //qDebug() << "Server is not work! Try to start!\n\r";
             }
         }
@@ -784,10 +839,10 @@ void processor::transactionDB(void)
 
                         //m_conn->close();
 
-                        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+                        //m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                        //m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
 
-                        qDebug() << "Электропитание оборудования отключено по причине критического превышения температуры более 35 градусов Цельсия на  " + rec.field("namestation").value().toString();
+                        qDebug() << "Электропитание оборудования"<< (shutdown() ? " отключено " : "не отключено (ошибка комманды) - ") <<"по причине критического превышения температуры более 35 градусов Цельсия на  " + rec.field("namestation").value().toString();
 
                         if (!m_meteo)
                         {
@@ -922,11 +977,11 @@ void processor::transactionDB(void)
 
                         //m_conn->close();
 
-                        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-                        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+                        //m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+                        //m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
 
 
-                        qDebug() << "Электропитание оборудования отключено по причине критического понижения температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
+                        qDebug() << "Электропитание оборудования"<< (shutdown() ? " отключено " : "не отключено (ошибка комманды) - ") <<"по причине критического понижения температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
 
                         if (!m_meteo)
                         {
@@ -1070,7 +1125,7 @@ void processor::startTransactTimer( QSqlDatabase *conn) //start by signal dbForm
     query->first();
     QSqlRecord rec = query->record();
 
-    m_transactTimer->start(rec.field("average_period").value().toInt() *1000);
+    m_transactTimer->start(rec.field("average_period").value().toInt() *1000); //change
 
     m_uuidStation  = new QUuid(rec.field("idd").value().toUuid());
 
@@ -1168,6 +1223,33 @@ void processor::readSocketStatus()
 
 }
 
+bool processor::shutdown()
+{
+    QStringList params;
+
+    qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "host down");
+
+    params << "-c" <<"1"<< "-q" <<m_ssh_ip;
+
+    if ( m_ssh_cmdr->sshChannel_is_open())
+    {
+        m_ssh_cmdr->doCmd("/vmfs/volumes/datastore1/down.sh"); //remote script
+
+        while (QProcess::execute(QString("ping"), params ) == 0 ) {
+        }
+        qDebug() << "ESXi host is down...";
+
+        QThread::msleep(5000); //5 sec waiting for shutdown
+
+        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+        qDebug() << "UPS down command is executed...";
+        return 1;
+
+    } else {
+        return 0;
+    }
+}
 
 
 

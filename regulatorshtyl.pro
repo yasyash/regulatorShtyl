@@ -30,7 +30,8 @@ SOURCES += \
     service.cpp \
     processor.cpp \
     meteotcpsock.cpp \
-    ivtm.cpp
+    ivtm.cpp \
+    ssh_cmd_ex.cpp
 
 
 
@@ -42,8 +43,9 @@ HEADERS += \
     ups_status.h \
     processor.h \
     meteotcpsock.h \
-    ivtm.h
+    ivtm.h \
+    ssh_cmd_ex.h
 
-LIBS += -lnetsnmp -ltelnet -lnetsnmpmibs
+LIBS += -lnetsnmp -ltelnet -lnetsnmpmibs -lssh
 
 DEFINES += APP_VERSION=$$VERSION
