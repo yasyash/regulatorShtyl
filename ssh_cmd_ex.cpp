@@ -52,7 +52,10 @@ ssh_cmd_ex::ssh_cmd_ex(QString &_ssh_ip,  quint16 &_ssh_port, QString &_ssh_user
     }
 
 }
+ssh_cmd_ex::~ssh_cmd_ex()
+{
 
+}
 
 bool ssh_cmd_ex::doCmd(QString _str)
 {

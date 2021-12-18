@@ -10,13 +10,13 @@ class ssh_cmd_ex
 {
 public:
     ssh_cmd_ex(QString &_ssh_ip,  quint16 &_ssh_port, QString &_ssh_user, QString &_ssh_pwd);
+    ~ssh_cmd_ex();
     bool doCmd(QString _str);
     void free_channel(ssh_channel channel);
     void free_session(ssh_session session);
     void error(ssh_session session);
     bool sshSession_is_open();
     bool sshChannel_is_open();
-
 
 public:
     QString m_ssh_ip;

@@ -1101,20 +1101,13 @@ void processor::transactionDB(void)
                     query_log.finish();
 
                     qDebug() << "Зафиксировано понижение температуры менее 15 градусов Цельсия на " + rec.field("namestation").value().toString();
-
                 }
-
-
             }
-
-
         }
     }
-
-
-
     //  m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.3.0","0");
 }
+
 void processor::startTransactTimer( QSqlDatabase *conn) //start by signal dbForm
 {
 
@@ -1157,16 +1150,18 @@ void processor::startTransactTimer( QSqlDatabase *conn) //start by signal dbForm
 
     query->finish();
 
-    //    query->~QSqlQuery();
-
+    if (!m_ssh_cmdr)
+    {
+        //parse ssh parameters
+        if ((m_ssh_ip != "")&&(m_ssh_port > 0)&& (m_ssh_user != "")&&(m_ssh_pwd !=""))
+            m_ssh_cmdr = new ssh_cmd_ex(m_ssh_ip, m_ssh_port, m_ssh_user, m_ssh_pwd);
+    }
 }
 
 
 //Read the status of devices that are connected via TCP
 void processor::readSocketStatus()
 {
-
-
     QString tmp_type_measure;
     QStringList dust = {"PM1", "PM2.5", "PM4", "PM10", "PM"  };
     int tmp;
@@ -1227,28 +1222,36 @@ bool processor::shutdown()
 {
     QStringList params;
 
-    qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "host down");
+    if (m_ssh_cmdr){
+        qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "host down");
 
-    params << "-c" <<"1"<< "-q" <<m_ssh_ip;
+        params << "-c" <<"1"<< "-q" <<m_ssh_ip;
 
-    if ( m_ssh_cmdr->sshChannel_is_open())
-    {
-        m_ssh_cmdr->doCmd("/vmfs/volumes/datastore1/down.sh"); //remote script
+        if ( m_ssh_cmdr->sshSession_is_open())
+        {
+            m_ssh_cmdr->doCmd("/vmfs/volumes/datastore1/down.sh"); //remote script
 
-        while (QProcess::execute(QString("ping"), params ) == 0 ) {
+            while (QProcess::execute(QString("ping"), params ) == 0 ) {
+            }
+            qDebug() << "ESXi host is down...";
+
+            QThread::msleep(5000); //5 sec waiting for shutdown
+
+            m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
+            m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
+            qDebug() << "UPS down command is executed...";
+            m_ssh_cmdr->~ssh_cmd_ex();
+            delete m_ssh_cmdr;
+            m_ssh_cmdr = nullptr;
+            return 1;
+
+        } else {
+            return 0;
         }
-        qDebug() << "ESXi host is down...";
-
-        QThread::msleep(5000); //5 sec waiting for shutdown
-
-        m_ups->set_data_int(".1.3.6.1.2.1.33.1.8.2.0","0");
-        m_ups->set_data_int(".1.3.6.1.4.1.34498.2.6.9.1.4.0","0");
-        qDebug() << "UPS down command is executed...";
-        return 1;
-
     } else {
         return 0;
     }
+
 }
 
 
