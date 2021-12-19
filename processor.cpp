@@ -416,7 +416,7 @@ void processor::transactionDB(void)
         {
             QStringList params;
 
-            qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "host down");
+            qDebug() << "ESXi Status:  " << (m_ssh_cmdr->sshChannel_is_open() ? "host running" : "probably host down");
 
             params << "-c" <<"1"<< "-q" <<m_ssh_ip;
 
@@ -598,7 +598,14 @@ void processor::transactionDB(void)
             if (m_meteo)
                 m_meteo->~MeteoTcpSock();
 
-            qDebug() << "Database reconnection and reload sensors is done!\n\r";
+            if (!m_ssh_cmdr)
+            {
+                //parse ssh parameters
+                if ((m_ssh_ip != "")&&(m_ssh_port > 0)&& (m_ssh_user != "")&&(m_ssh_pwd !=""))
+                    m_ssh_cmdr = new ssh_cmd_ex(m_ssh_ip, m_ssh_port, m_ssh_user, m_ssh_pwd);
+            }
+
+            qDebug() << "The database has reconnected and the sensors reloaded.!\n\r";
 
         }
 
